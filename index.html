@@ -206,8 +206,9 @@ function show(v) {
 const setStatus = s => ($('status').textContent = s);
 
 // ---- đăng nhập ----
+let pending;
 function ensureToken() {
-  return new Promise((res, rej) => {
+  return pending ??= new Promise((res, rej) => {
     if (token && token.exp > Date.now() + 60000) return res(token.v);
     if (!window.google?.accounts) return rej(new Error('Chưa tải được dịch vụ Google'));
     tokenClient ??= google.accounts.oauth2.initTokenClient({
@@ -220,8 +221,10 @@ function ensureToken() {
     };
     tokenClient.error_callback = e => rej(new Error(e.type));
     tokenClient.requestAccessToken({ prompt: '' });
-  });
+  }).finally(() => (pending = null));
 }
+// Token Google chỉ sống 1 giờ; làm mới im lặng cần cửa sổ do người dùng chạm gọi ra, nên làm ngay ở lần chạm đầu.
+addEventListener('pointerdown', () => { if (!token || token.exp < Date.now() + 300000) ensureToken().catch(() => {}); }, true);
 async function api(url, opt = {}) {
   for (let i = 0; i < 2; i++) {
     const t = await ensureToken();
