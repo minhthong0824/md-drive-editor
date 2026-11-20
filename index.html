@@ -4,60 +4,131 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ghi chú Drive</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#2563eb">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ghi chú">
 <style>
-  :root { --bg:#fff; --fg:#1b1b1f; --mut:#6b6b76; --line:#dcdce2; --acc:#2563eb; --card:#f4f4f7; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#16161a; --fg:#ececf1; --mut:#9a9aa6; --line:#2e2e36; --acc:#6b9bff; --card:#202026; } }
+  :root { --bg:#fff; --fg:#1b1b1f; --mut:#6b6b76; --line:#dcdce2; --acc:#2563eb; --card:#f4f4f7; --sel:#dbe7ff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16161a; --fg:#ececf1; --mut:#9a9aa6; --line:#2e2e36; --acc:#6b9bff; --card:#202026; --sel:#2a3a5c; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
   body { display: flex; flex-direction: column; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); min-height: 52px; }
-  header h1 { font-size: 17px; margin: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #status { font-size: 13px; color: var(--mut); white-space: nowrap; }
-  button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-height: 40px; }
-  button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
-  main, section { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
   [hidden] { display: none !important; }
-  .row { display: flex; align-items: center; gap: 8px; padding: 12px; margin-bottom: 8px; background: var(--card); border-radius: 12px; }
-  .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .row small { color: var(--mut); display: block; }
-  .row button { padding: 4px 10px; min-height: 32px; }
-  #text { flex: 1; width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 12px; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; }
-  #editor { padding: 0; display: flex; }
+  button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; min-height: 40px; cursor: pointer; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+  button.flat { background: transparent; border-color: transparent; }
+  button[aria-pressed="true"] { background: var(--sel); border-color: var(--acc); }
+
+  #app { flex: 1; min-height: 0; display: flex; }
+  /* thanh bên: ẩn / hiện như Gemini */
+  #side { width: 280px; flex: none; display: flex; flex-direction: column; background: var(--card); border-right: 1px solid var(--line); transition: margin-left .2s, transform .2s; }
+  body:not(.side-open) #side { margin-left: -281px; }
+  #side .top { padding: 12px; }
+  #side .top button { width: 100%; }
+  #side .label { padding: 4px 16px; font-size: 13px; color: var(--mut); }
+  #recent { flex: 1; overflow: auto; padding: 0 8px; }
+  #side .foot { padding: 8px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+  .item { display: flex; align-items: center; gap: 4px; border-radius: 10px; padding: 0 4px 0 12px; cursor: pointer; }
+  .item:hover { background: var(--line); }
+  .item.active { background: var(--sel); }
+  .item .name { flex: 1; min-width: 0; padding: 10px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item button { min-height: 32px; padding: 0 8px; }
+  #scrim { display: none; }
+  @media (max-width: 799px) {
+    #side { position: fixed; z-index: 20; top: 0; bottom: 0; left: 0; width: min(300px, 85vw); margin-left: 0 !important; transform: translateX(-105%); padding-top: env(safe-area-inset-top); }
+    body.side-open #side { transform: none; box-shadow: 4px 0 24px #0006; }
+    body.side-open #scrim { display: block; position: fixed; inset: 0; z-index: 10; background: #0006; }
+  }
+
+  #mainwrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); min-height: 52px; }
+  header h1 { font-size: 17px; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #status { font-size: 13px; color: var(--mut); white-space: nowrap; }
+  #toolbar { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  #toolbar button { flex: none; min-width: 40px; padding: 4px 8px; }
+  #toolbar .sep { flex: none; width: 1px; background: var(--line); margin: 4px 2px; }
+  #editor { flex: 1; min-height: 0; display: flex; }
+  #text { flex: 1; width: 100%; resize: none; border: 0; outline: 0; padding: 12px; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; }
+  #preview { flex: 1; overflow: auto; padding: 12px 16px; line-height: 1.6; }
+  #preview img { max-width: 100%; }
+  #preview pre, #preview code { background: var(--card); border-radius: 6px; }
+  #preview code { padding: 1px 5px; }
+  #preview pre { padding: 10px; overflow: auto; }
+  #preview pre code { padding: 0; }
+  #preview input[type=checkbox] { width: auto; margin-right: 6px; }
+  #preview blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--mut); }
+  #empty, #settings { flex: 1; padding: 16px; overflow: auto; }
+  #empty { display: flex; align-items: center; justify-content: center; color: var(--mut); text-align: center; }
   label { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--mut); }
   input { width: 100%; font: inherit; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
-  .actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
   .hint { color: var(--mut); font-size: 14px; }
 </style>
 </head>
 <body>
-<header>
-  <button id="back" hidden>←</button>
-  <h1 id="title">Ghi chú Drive</h1>
-  <span id="status"></span>
-  <button id="gear" aria-label="Cài đặt">⚙</button>
-</header>
+<div id="app">
+  <aside id="side">
+    <div class="top"><button class="primary" id="pick">＋ Mở file từ Drive</button></div>
+    <div class="label">Gần đây</div>
+    <div id="recent"></div>
+    <div class="foot"><button class="flat" id="gear">⚙ Cài đặt</button><button class="flat" id="install" hidden>⬇ Cài ứng dụng</button></div>
+  </aside>
+  <div id="scrim"></div>
 
-<main id="home">
-  <div class="actions">
-    <button class="primary" id="pick">Mở file từ Drive</button>
-    <button id="signin" hidden>Đăng nhập lại</button>
+  <div id="mainwrap">
+    <header>
+      <button class="flat" id="menu" aria-label="Thanh bên">☰</button>
+      <h1 id="title">Ghi chú Drive</h1>
+      <span id="status"></span>
+      <button id="signin" hidden>Đăng nhập</button>
+      <button id="viewBtn" hidden>👁 Xem</button>
+    </header>
+
+    <div id="toolbar" hidden>
+      <button data-act="bullet-toggle" id="autoBtn" aria-pressed="true" title="Enter tự thêm gạch đầu dòng">↵•</button>
+      <span class="sep"></span>
+      <button data-act="undo" aria-label="Hoàn tác">↶</button>
+      <button data-act="redo" aria-label="Làm lại">↷</button>
+      <span class="sep"></span>
+      <button data-act="h" aria-label="Tiêu đề"><b>H</b></button>
+      <button data-act="b" aria-label="Đậm"><b>B</b></button>
+      <button data-act="i" aria-label="Nghiêng"><i>I</i></button>
+      <button data-act="s" aria-label="Gạch ngang chữ"><s>S</s></button>
+      <span class="sep"></span>
+      <button data-act="ul" aria-label="Danh sách">•</button>
+      <button data-act="ol" aria-label="Danh sách số">1.</button>
+      <button data-act="task" aria-label="Việc cần làm">☑</button>
+      <button data-act="quote" aria-label="Trích dẫn">❝</button>
+      <span class="sep"></span>
+      <button data-act="code" aria-label="Mã trong dòng">&lt;/&gt;</button>
+      <button data-act="fence" aria-label="Khối mã">{ }</button>
+      <button data-act="link" aria-label="Liên kết">🔗</button>
+      <button data-act="hr" aria-label="Đường kẻ">―</button>
+    </div>
+
+    <main id="editor" hidden>
+      <textarea id="text" spellcheck="false" autocapitalize="sentences"></textarea>
+      <div id="preview" hidden></div>
+    </main>
+    <section id="empty">Chọn một file ở thanh bên<br>hoặc bấm "Mở file từ Drive".</section>
+    <section id="settings" hidden>
+      <p class="hint">Nhập một lần, lưu trong trình duyệt của máy này.</p>
+      <label>OAuth Client ID (Web)</label><input id="cClient" autocomplete="off">
+      <label>API key (Picker)</label><input id="cKey" autocomplete="off">
+      <label>App ID (số của dự án Google Cloud)</label><input id="cApp" autocomplete="off">
+      <div class="actions"><button class="primary" id="cSave">Lưu</button><button id="cClose">Đóng</button></div>
+    </section>
   </div>
-  <h3>Mở gần đây</h3>
-  <div id="recent"></div>
-</main>
-
-<main id="editor" hidden><textarea id="text" spellcheck="false" autocapitalize="sentences"></textarea></main>
-
-<section id="settings" hidden>
-  <p class="hint">Nhập một lần, lưu trong trình duyệt của máy này. Cách lấy 3 giá trị: xem hướng dẫn kèm theo.</p>
-  <label>OAuth Client ID (Web)</label><input id="cClient" autocomplete="off">
-  <label>API key (Picker)</label><input id="cKey" autocomplete="off">
-  <label>App ID (số của dự án Google Cloud)</label><input id="cApp" autocomplete="off">
-  <div class="actions" style="margin-top:16px"><button class="primary" id="cSave">Lưu</button></div>
-</section>
+</div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const F = 'https://www.googleapis.com/drive/v3/files';
@@ -69,14 +140,20 @@ const LS = {
 const hashCfg = new URLSearchParams(location.hash.slice(1)).get('c');
 if (hashCfg) { try { LS.set('cfg', JSON.parse(atob(hashCfg))); } catch {} history.replaceState(null, '', location.pathname); }
 let cfg = LS.get('cfg', {}), token = LS.get('tok', null), tokenClient;
-let cur = null, saving = false, saveTimer, pollTimer;
+let cur = null, saving = false, saveTimer, pollTimer, view = 'empty', prevView = 'empty', preview = false;
+let autoBullet = LS.get('autoBullet', true), shiftDown = false;
+const ta = $('text');
 
-function show(view) {
-  for (const v of ['home', 'editor', 'settings']) $(v).hidden = v !== view;
-  $('back').hidden = view === 'home';
-  $('gear').hidden = view !== 'home';
-  if (view !== 'editor') $('title').textContent = view === 'settings' ? 'Cài đặt' : 'Ghi chú Drive';
-  if (view === 'home') renderRecent();
+// ---- bố cục ----
+const mobile = matchMedia('(max-width: 799px)');
+let sideOpen = mobile.matches ? false : LS.get('side', true);
+function applySide() { document.body.classList.toggle('side-open', sideOpen); }
+function setSide(on) { sideOpen = on; if (!mobile.matches) LS.set('side', on); applySide(); }
+function show(v) {
+  prevView = view === 'settings' ? prevView : view; view = v;
+  $('editor').hidden = v !== 'editor'; $('empty').hidden = v !== 'empty'; $('settings').hidden = v !== 'settings';
+  $('viewBtn').hidden = v !== 'editor'; $('toolbar').hidden = v !== 'editor' || preview;
+  $('title').textContent = v === 'settings' ? 'Cài đặt' : cur ? cur.name : 'Ghi chú Drive';
 }
 const setStatus = s => ($('status').textContent = s);
 
@@ -115,14 +192,15 @@ async function pick() {
   try {
     const t = await ensureToken();
     await new Promise(r => gapi.load('picker', r));
-    const view = new google.picker.DocsView().setIncludeFolders(true).setSelectFolderEnabled(false);
-    new google.picker.PickerBuilder().addView(view).setOAuthToken(t).setDeveloperKey(cfg.apiKey).setAppId(cfg.appId)
+    const v = new google.picker.DocsView().setIncludeFolders(true).setSelectFolderEnabled(false);
+    new google.picker.PickerBuilder().addView(v).setOAuthToken(t).setDeveloperKey(cfg.apiKey).setAppId(cfg.appId)
       .setCallback(d => { if (d.action === 'picked') openFile(d.docs[0].id); }).build().setVisible(true);
   } catch (e) { needSignin(e); }
 }
 
 async function openFile(id) {
   try {
+    if (cur && cur.dirty) { clearTimeout(saveTimer); await save(); }
     setStatus('Đang mở…');
     const meta = await (await api(`${F}/${id}?fields=id,name,modifiedTime`)).json();
     let text = await (await api(`${F}/${id}?alt=media`)).text();
@@ -131,10 +209,12 @@ async function openFile(id) {
     // Bản nháp còn sót (mất mạng / đóng trang giữa chừng) khác bản trên Drive: hỏi khôi phục.
     if (draft !== null && draft !== text && confirm('Có bản nháp chưa lưu của file này. Khôi phục?')) { text = draft; dirty = true; }
     cur = { id, name: meta.name, modified: meta.modifiedTime, dirty };
-    $('text').value = text;
-    $('title').textContent = meta.name;
+    ta.value = text;
     addRecent(id, meta.name);
+    setPreview(false);
     show('editor');
+    renderRecent();
+    if (mobile.matches) setSide(false);
     setStatus(dirty ? 'Chưa lưu…' : '');
     if (dirty) save();
     clearInterval(pollTimer); pollTimer = setInterval(poll, 8000);
@@ -144,14 +224,14 @@ async function openFile(id) {
 // ---- lưu ----
 function onInput() {
   cur.dirty = true;
-  localStorage.setItem('d:' + cur.id, $('text').value);
+  localStorage.setItem('d:' + cur.id, ta.value);
   setStatus('Chưa lưu…');
   clearTimeout(saveTimer); saveTimer = setTimeout(save, 1500);
 }
 async function save() {
   if (!cur || !cur.dirty || saving) return;
   saving = true; setStatus('Đang lưu…');
-  const text = $('text').value;
+  const text = ta.value;
   try {
     const m = await (await api(`${F}/${cur.id}?fields=modifiedTime`)).json();
     if (m.modifiedTime !== cur.modified &&
@@ -162,7 +242,7 @@ async function save() {
     const r = await api(`https://www.googleapis.com/upload/drive/v3/files/${cur.id}?uploadType=media&fields=modifiedTime`,
       { method: 'PATCH', headers: { 'Content-Type': 'text/markdown; charset=UTF-8' }, body: text });
     cur.modified = (await r.json()).modifiedTime;
-    cur.dirty = $('text').value !== text;
+    cur.dirty = ta.value !== text;
     if (!cur.dirty) { localStorage.removeItem('d:' + cur.id); setStatus('Đã lưu ✓'); }
     else { clearTimeout(saveTimer); saveTimer = setTimeout(save, 500); }
   } catch (e) {
@@ -179,44 +259,141 @@ async function poll() {
     if (m.modifiedTime === cur.modified || cur.dirty) return;
     const text = await (await api(`${F}/${cur.id}?alt=media`)).text();
     if (cur.dirty) return;
-    cur.modified = m.modifiedTime; $('text').value = text; setStatus('Đã cập nhật từ Drive');
+    cur.modified = m.modifiedTime; ta.value = text; setStatus('Đã cập nhật từ Drive');
+    if (preview) renderPreview();
   } catch {}
 }
 
 // ---- gần đây ----
 function addRecent(id, name) {
-  LS.set('recent', [{ id, name, t: Date.now() }, ...LS.get('recent', []).filter(r => r.id !== id)].slice(0, 20));
+  LS.set('recent', [{ id, name, t: Date.now() }, ...LS.get('recent', []).filter(r => r.id !== id)].slice(0, 30));
 }
 function renderRecent() {
   const box = $('recent'); box.textContent = '';
   const list = LS.get('recent', []);
-  if (!list.length) box.innerHTML = '<p class="hint">Chưa có file nào.</p>';
+  if (!list.length) box.innerHTML = '<p class="hint" style="padding:0 8px">Chưa có file nào.</p>';
   for (const r of list) {
-    const row = document.createElement('div'); row.className = 'row';
-    const n = document.createElement('div'); n.className = 'name';
-    n.textContent = r.name;
-    const s = document.createElement('small'); s.textContent = new Date(r.t).toLocaleString('vi-VN'); n.append(s);
-    const x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Xóa khỏi danh sách');
+    const row = document.createElement('div'); row.className = 'item' + (cur && cur.id === r.id ? ' active' : '');
+    const n = document.createElement('div'); n.className = 'name'; n.textContent = r.name; n.title = new Date(r.t).toLocaleString('vi-VN');
+    const x = document.createElement('button'); x.className = 'flat'; x.textContent = '✕'; x.setAttribute('aria-label', 'Xóa khỏi danh sách');
     x.onclick = e => { e.stopPropagation(); LS.set('recent', list.filter(q => q.id !== r.id)); renderRecent(); };
     row.onclick = () => openFile(r.id);
     row.append(n, x); box.append(row);
   }
 }
 
+// ---- xem trước ----
+function renderPreview() {
+  const box = $('preview');
+  if (!window.marked || !window.DOMPurify) { box.textContent = ta.value; return; }
+  box.innerHTML = DOMPurify.sanitize(marked.parse(ta.value, { breaks: true }));
+  box.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+}
+function setPreview(on) {
+  preview = on; ta.hidden = on; $('preview').hidden = !on; $('toolbar').hidden = view !== 'editor' || on;
+  $('viewBtn').textContent = on ? '✎ Sửa' : '👁 Xem';
+  if (on) renderPreview();
+}
+
+// ---- công cụ Markdown (dùng execCommand để giữ lịch sử hoàn tác của trình duyệt) ----
+function put(s, e, text, selStart, selEnd) {
+  ta.focus(); ta.setSelectionRange(s, e);
+  document.execCommand(text ? 'insertText' : 'delete', false, text);
+  ta.setSelectionRange(selStart ?? s + text.length, selEnd ?? s + text.length);
+}
+function wrap(b, a, ph = '') {
+  const v = ta.value, s = ta.selectionStart, e = ta.selectionEnd, sel = v.slice(s, e);
+  if (sel && v.slice(s - b.length, s) === b && v.slice(e, e + a.length) === a)
+    return put(s - b.length, e + a.length, sel, s - b.length, s - b.length + sel.length);
+  if (sel.length >= b.length + a.length && sel.startsWith(b) && sel.endsWith(a)) {
+    const inner = sel.slice(b.length, sel.length - a.length);
+    return put(s, e, inner, s, s + inner.length);
+  }
+  const t = sel || ph;
+  put(s, e, b + t + a, s + b.length, s + b.length + t.length);
+}
+function lines(fn) {
+  const v = ta.value, s = ta.selectionStart, e = ta.selectionEnd;
+  const ls = v.lastIndexOf('\n', s - 1) + 1; let le = v.indexOf('\n', e); if (le < 0) le = v.length;
+  const out = fn(v.slice(ls, le).split('\n')).join('\n');
+  put(ls, le, out, ls, ls + out.length);
+}
+const MARK = /^([-*+] \[[ xX]\] |[-*+] |\d+\. |> )/;
+function listFmt(kind) {
+  const re = { ul: /^[-*+] (?!\[[ xX]\] )/, ol: /^\d+\. /, task: /^[-*+] \[[ xX]\] /, quote: /^> / }[kind];
+  lines(ls => {
+    const filled = ls.filter(l => l.trim());
+    const all = filled.length && filled.every(l => re.test(l.trimStart()));
+    let n = 0;
+    return ls.map(l => {
+      if (!l.trim() && ls.length > 1) return l;
+      const ind = l.match(/^\s*/)[0], body = l.slice(ind.length).replace(MARK, '');
+      if (all) return ind + body;
+      n++; return ind + { ul: '- ', ol: n + '. ', task: '- [ ] ', quote: '> ' }[kind] + body;
+    });
+  });
+}
+const ACT = {
+  undo() { ta.focus(); document.execCommand('undo'); },
+  redo() { ta.focus(); document.execCommand('redo'); },
+  h() { lines(ls => ls.map(l => { const m = l.match(/^(#{1,6}) /), lv = m ? m[1].length : 0, body = l.replace(/^#{1,6} /, ''); return lv >= 3 ? body : '#'.repeat(lv + 1) + ' ' + body; })); },
+  b() { wrap('**', '**', 'đậm'); }, i() { wrap('_', '_', 'nghiêng'); }, s() { wrap('~~', '~~', 'gạch'); },
+  ul() { listFmt('ul'); }, ol() { listFmt('ol'); }, task() { listFmt('task'); }, quote() { listFmt('quote'); },
+  code() { wrap('`', '`', 'mã'); }, fence() { wrap('```\n', '\n```', 'mã'); },
+  link() {
+    const s = ta.selectionStart, e = ta.selectionEnd, t = ta.value.slice(s, e) || 'văn bản';
+    put(s, e, `[${t}](url)`, s + t.length + 3, s + t.length + 6);
+  },
+  hr() { put(ta.selectionStart, ta.selectionEnd, '\n\n---\n\n'); },
+  'bullet-toggle'() {
+    autoBullet = !autoBullet; LS.set('autoBullet', autoBullet);
+    $('autoBtn').setAttribute('aria-pressed', autoBullet); setStatus(autoBullet ? 'Tự gạch đầu dòng: bật' : 'Tự gạch đầu dòng: tắt');
+  },
+};
+
+// Enter: tiếp tục dấu danh sách của dòng trên; dòng chỉ có dấu thì bỏ dấu (thoát danh sách). Shift+Enter: xuống dòng thường.
+ta.addEventListener('beforeinput', e => {
+  if (!autoBullet || shiftDown || (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph')) return;
+  const v = ta.value, s = ta.selectionStart, ls = v.lastIndexOf('\n', s - 1) + 1, line = v.slice(ls, s);
+  const m = line.match(/^(\s*)([-*+] \[[ xX]\] |[-*+] |(\d+)\. )/);
+  if (!m) return;
+  e.preventDefault();
+  if (line.length === m[0].length) return put(ls, ta.selectionEnd, '', ls, ls);
+  const next = m[3] ? (+m[3] + 1) + '. ' : m[2].replace(/\[[xX]\]/, '[ ]');
+  put(s, ta.selectionEnd, '\n' + m[1] + next);
+});
+ta.addEventListener('keydown', e => {
+  shiftDown = e.shiftKey;
+  const k = (e.ctrlKey || e.metaKey) && !e.altKey && { b: 'b', i: 'i', k: 'link' }[e.key.toLowerCase()];
+  if (k) { e.preventDefault(); ACT[k](); }
+});
+ta.addEventListener('keyup', e => { shiftDown = e.shiftKey; });
+$('toolbar').addEventListener('pointerdown', e => e.preventDefault()); // giữ con trỏ và bàn phím trong ô chữ
+$('toolbar').addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (b) ACT[b.dataset.act](); });
+
 // ---- nối dây ----
-async function leave() { clearTimeout(saveTimer); await save(); cur = null; clearInterval(pollTimer); setStatus(''); show('home'); }
-$('text').addEventListener('input', onInput);
-$('back').onclick = () => ($('settings').hidden ? leave() : show(cur ? 'editor' : 'home'));
+ta.addEventListener('input', onInput);
+$('menu').onclick = () => setSide(!sideOpen);
+$('scrim').onclick = () => setSide(false);
 $('pick').onclick = pick;
+$('viewBtn').onclick = () => setPreview(!preview);
 $('signin').onclick = () => ensureToken().catch(needSignin);
-$('gear').onclick = () => { $('cClient').value = cfg.clientId || ''; $('cKey').value = cfg.apiKey || ''; $('cApp').value = cfg.appId || ''; show('settings'); };
+$('gear').onclick = () => { $('cClient').value = cfg.clientId || ''; $('cKey').value = cfg.apiKey || ''; $('cApp').value = cfg.appId || ''; show('settings'); if (mobile.matches) setSide(false); };
+$('cClose').onclick = () => show(prevView);
 $('cSave').onclick = () => {
   cfg = { clientId: $('cClient').value.trim(), apiKey: $('cKey').value.trim(), appId: $('cApp').value.trim() };
-  LS.set('cfg', cfg); token = null; tokenClient = null; show('home');
+  LS.set('cfg', cfg); token = null; tokenClient = null; show(prevView);
 };
 document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(saveTimer); save(); } });
 addEventListener('pagehide', () => save());
-show(cfg.clientId && cfg.apiKey && cfg.appId ? 'home' : 'settings');
+let installEv;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; $('install').hidden = false; });
+addEventListener('appinstalled', () => { installEv = null; $('install').hidden = true; });
+$('install').onclick = async () => { if (!installEv) return; installEv.prompt(); await installEv.userChoice; installEv = null; $('install').hidden = true; };
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+$('autoBtn').setAttribute('aria-pressed', autoBullet);
+applySide(); renderRecent();
+if (cfg.clientId && cfg.apiKey && cfg.appId) show('empty'); else { show('settings'); prevView = 'empty'; }
 </script>
 </body>
 </html>
