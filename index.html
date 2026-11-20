@@ -65,6 +65,9 @@ const LS = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
 };
+// Mở một lần bằng đường dẫn có #c=<base64 JSON> để nhập cấu hình khỏi gõ tay; xong thì xóa khỏi thanh địa chỉ.
+const hashCfg = new URLSearchParams(location.hash.slice(1)).get('c');
+if (hashCfg) { try { LS.set('cfg', JSON.parse(atob(hashCfg))); } catch {} history.replaceState(null, '', location.pathname); }
 let cfg = LS.get('cfg', {}), token = LS.get('tok', null), tokenClient;
 let cur = null, saving = false, saveTimer, pollTimer;
 
