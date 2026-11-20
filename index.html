@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ghi chú Drive</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1b1f; --mut:#6b6b76; --line:#dcdce2; --acc:#2563eb; --card:#f4f4f7; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16161a; --fg:#ececf1; --mut:#9a9aa6; --line:#2e2e36; --acc:#6b9bff; --card:#202026; } }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); min-height: 52px; }
+  header h1 { font-size: 17px; margin: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #status { font-size: 13px; color: var(--mut); white-space: nowrap; }
+  button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-height: 40px; }
+  button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+  main, section { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+  [hidden] { display: none !important; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 12px; margin-bottom: 8px; background: var(--card); border-radius: 12px; }
+  .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row small { color: var(--mut); display: block; }
+  .row button { padding: 4px 10px; min-height: 32px; }
+  #text { flex: 1; width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 12px; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; }
+  #editor { padding: 0; display: flex; }
+  label { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--mut); }
+  input { width: 100%; font: inherit; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+  .actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .hint { color: var(--mut); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <button id="back" hidden>←</button>
+  <h1 id="title">Ghi chú Drive</h1>
+  <span id="status"></span>
+  <button id="gear" aria-label="Cài đặt">⚙</button>
+</header>
+
+<main id="home">
+  <div class="actions">
+    <button class="primary" id="pick">Mở file từ Drive</button>
+    <button id="signin" hidden>Đăng nhập lại</button>
+  </div>
+  <h3>Mở gần đây</h3>
+  <div id="recent"></div>
+</main>
+
+<main id="editor" hidden><textarea id="text" spellcheck="false" autocapitalize="sentences"></textarea></main>
+
+<section id="settings" hidden>
+  <p class="hint">Nhập một lần, lưu trong trình duyệt của máy này. Cách lấy 3 giá trị: xem hướng dẫn kèm theo.</p>
+  <label>OAuth Client ID (Web)</label><input id="cClient" autocomplete="off">
+  <label>API key (Picker)</label><input id="cKey" autocomplete="off">
+  <label>App ID (số của dự án Google Cloud)</label><input id="cApp" autocomplete="off">
+  <div class="actions" style="margin-top:16px"><button class="primary" id="cSave">Lưu</button></div>
+</section>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script>
+const $ = id => document.getElementById(id);
+const F = 'https://www.googleapis.com/drive/v3/files';
+const LS = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+};
+let cfg = LS.get('cfg', {}), token = LS.get('tok', null), tokenClient;
+let cur = null, saving = false, saveTimer, pollTimer;
+
+function show(view) {
+  for (const v of ['home', 'editor', 'settings']) $(v).hidden = v !== view;
+  $('back').hidden = view === 'home';
+  $('gear').hidden = view !== 'home';
+  if (view !== 'editor') $('title').textContent = view === 'settings' ? 'Cài đặt' : 'Ghi chú Drive';
+  if (view === 'home') renderRecent();
+}
+const setStatus = s => ($('status').textContent = s);
+
+// ---- đăng nhập ----
+function ensureToken() {
+  return new Promise((res, rej) => {
+    if (token && token.exp > Date.now() + 60000) return res(token.v);
+    if (!window.google?.accounts) return rej(new Error('Chưa tải được dịch vụ Google'));
+    tokenClient ??= google.accounts.oauth2.initTokenClient({
+      client_id: cfg.clientId, scope: 'https://www.googleapis.com/auth/drive.file', callback: () => {},
+    });
+    tokenClient.callback = r => {
+      if (r.error) return rej(new Error(r.error));
+      token = { v: r.access_token, exp: Date.now() + r.expires_in * 1000 };
+      LS.set('tok', token); $('signin').hidden = true; res(token.v);
+    };
+    tokenClient.error_callback = e => rej(new Error(e.type));
+    tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+async function api(url, opt = {}) {
+  for (let i = 0; i < 2; i++) {
+    const t = await ensureToken();
+    const r = await fetch(url, { ...opt, headers: { ...opt.headers, Authorization: 'Bearer ' + t } });
+    if (r.status === 401) { token = null; continue; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r;
+  }
+  throw new Error('Hết phiên đăng nhập');
+}
+// Trình duyệt chặn cửa sổ đăng nhập nếu không do người dùng bấm: hiện nút bấm tay.
+function needSignin(e) { setStatus(e.message); $('signin').hidden = false; }
+
+// ---- mở file ----
+async function pick() {
+  try {
+    const t = await ensureToken();
+    await new Promise(r => gapi.load('picker', r));
+    const view = new google.picker.DocsView().setIncludeFolders(true).setSelectFolderEnabled(false);
+    new google.picker.PickerBuilder().addView(view).setOAuthToken(t).setDeveloperKey(cfg.apiKey).setAppId(cfg.appId)
+      .setCallback(d => { if (d.action === 'picked') openFile(d.docs[0].id); }).build().setVisible(true);
+  } catch (e) { needSignin(e); }
+}
+
+async function openFile(id) {
+  try {
+    setStatus('Đang mở…');
+    const meta = await (await api(`${F}/${id}?fields=id,name,modifiedTime`)).json();
+    let text = await (await api(`${F}/${id}?alt=media`)).text();
+    const draft = localStorage.getItem('d:' + id);
+    let dirty = false;
+    // Bản nháp còn sót (mất mạng / đóng trang giữa chừng) khác bản trên Drive: hỏi khôi phục.
+    if (draft !== null && draft !== text && confirm('Có bản nháp chưa lưu của file này. Khôi phục?')) { text = draft; dirty = true; }
+    cur = { id, name: meta.name, modified: meta.modifiedTime, dirty };
+    $('text').value = text;
+    $('title').textContent = meta.name;
+    addRecent(id, meta.name);
+    show('editor');
+    setStatus(dirty ? 'Chưa lưu…' : '');
+    if (dirty) save();
+    clearInterval(pollTimer); pollTimer = setInterval(poll, 8000);
+  } catch (e) { needSignin(e); }
+}
+
+// ---- lưu ----
+function onInput() {
+  cur.dirty = true;
+  localStorage.setItem('d:' + cur.id, $('text').value);
+  setStatus('Chưa lưu…');
+  clearTimeout(saveTimer); saveTimer = setTimeout(save, 1500);
+}
+async function save() {
+  if (!cur || !cur.dirty || saving) return;
+  saving = true; setStatus('Đang lưu…');
+  const text = $('text').value;
+  try {
+    const m = await (await api(`${F}/${cur.id}?fields=modifiedTime`)).json();
+    if (m.modifiedTime !== cur.modified &&
+        !confirm('File đã bị sửa ở nơi khác (vd. trong Unity). OK = ghi đè bằng bản của bạn. Hủy = tải bản mới (bản đang gõ sẽ mất).')) {
+      saving = false; cur.dirty = false; localStorage.removeItem('d:' + cur.id);
+      return openFile(cur.id);
+    }
+    const r = await api(`https://www.googleapis.com/upload/drive/v3/files/${cur.id}?uploadType=media&fields=modifiedTime`,
+      { method: 'PATCH', headers: { 'Content-Type': 'text/markdown; charset=UTF-8' }, body: text });
+    cur.modified = (await r.json()).modifiedTime;
+    cur.dirty = $('text').value !== text;
+    if (!cur.dirty) { localStorage.removeItem('d:' + cur.id); setStatus('Đã lưu ✓'); }
+    else { clearTimeout(saveTimer); saveTimer = setTimeout(save, 500); }
+  } catch (e) {
+    needSignin(e); clearTimeout(saveTimer); saveTimer = setTimeout(save, 5000);
+  }
+  saving = false;
+}
+
+// Bản trên Drive đổi (sửa từ Unity qua Drive for desktop) mà mình chưa gõ gì thì nạp lại.
+async function poll() {
+  if (!cur || cur.dirty || saving || document.hidden) return;
+  try {
+    const m = await (await api(`${F}/${cur.id}?fields=modifiedTime`)).json();
+    if (m.modifiedTime === cur.modified || cur.dirty) return;
+    const text = await (await api(`${F}/${cur.id}?alt=media`)).text();
+    if (cur.dirty) return;
+    cur.modified = m.modifiedTime; $('text').value = text; setStatus('Đã cập nhật từ Drive');
+  } catch {}
+}
+
+// ---- gần đây ----
+function addRecent(id, name) {
+  LS.set('recent', [{ id, name, t: Date.now() }, ...LS.get('recent', []).filter(r => r.id !== id)].slice(0, 20));
+}
+function renderRecent() {
+  const box = $('recent'); box.textContent = '';
+  const list = LS.get('recent', []);
+  if (!list.length) box.innerHTML = '<p class="hint">Chưa có file nào.</p>';
+  for (const r of list) {
+    const row = document.createElement('div'); row.className = 'row';
+    const n = document.createElement('div'); n.className = 'name';
+    n.textContent = r.name;
+    const s = document.createElement('small'); s.textContent = new Date(r.t).toLocaleString('vi-VN'); n.append(s);
+    const x = document.createElement('button'); x.textContent = '✕'; x.setAttribute('aria-label', 'Xóa khỏi danh sách');
+    x.onclick = e => { e.stopPropagation(); LS.set('recent', list.filter(q => q.id !== r.id)); renderRecent(); };
+    row.onclick = () => openFile(r.id);
+    row.append(n, x); box.append(row);
+  }
+}
+
+// ---- nối dây ----
+async function leave() { clearTimeout(saveTimer); await save(); cur = null; clearInterval(pollTimer); setStatus(''); show('home'); }
+$('text').addEventListener('input', onInput);
+$('back').onclick = () => ($('settings').hidden ? leave() : show(cur ? 'editor' : 'home'));
+$('pick').onclick = pick;
+$('signin').onclick = () => ensureToken().catch(needSignin);
+$('gear').onclick = () => { $('cClient').value = cfg.clientId || ''; $('cKey').value = cfg.apiKey || ''; $('cApp').value = cfg.appId || ''; show('settings'); };
+$('cSave').onclick = () => {
+  cfg = { clientId: $('cClient').value.trim(), apiKey: $('cKey').value.trim(), appId: $('cApp').value.trim() };
+  LS.set('cfg', cfg); token = null; tokenClient = null; show('home');
+};
+document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(saveTimer); save(); } });
+addEventListener('pagehide', () => save());
+show(cfg.clientId && cfg.apiKey && cfg.appId ? 'home' : 'settings');
+</script>
+</body>
+</html>
