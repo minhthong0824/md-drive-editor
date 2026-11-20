@@ -135,12 +135,9 @@
       <div class="row2"><span>Giãn dòng</span><input type="range" id="uLh" min="1.2" max="2.2" step="0.1"><span id="uLhV"></span></div>
       <div class="row2"><span>Màu nhấn</span><div class="sw" id="uAcc"></div></div>
       <div class="actions"><button id="uReset">Đặt lại giao diện</button></div>
-      <h3>Kết nối Google</h3>
-      <p class="hint">Nhập một lần, lưu trong trình duyệt của máy này.</p>
-      <label>OAuth Client ID (Web)</label><input id="cClient" autocomplete="off">
-      <label>API key (Picker)</label><input id="cKey" autocomplete="off">
-      <label>App ID (số của dự án Google Cloud)</label><input id="cApp" autocomplete="off">
-      <div class="actions"><button class="primary" id="cSave">Lưu</button><button id="cClose">Đóng</button></div>
+      <h3>Cài như ứng dụng</h3>
+      <p class="hint">Trong menu ⋮ của trình duyệt chọn "Cài đặt ứng dụng" hoặc "Thêm vào màn hình chính".</p>
+      <div class="actions"><button class="primary" id="cClose">Đóng</button></div>
     </section>
   </div>
 </div>
@@ -156,10 +153,13 @@ const LS = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
 };
-// Mở một lần bằng đường dẫn có #c=<base64 JSON> để nhập cấu hình khỏi gõ tay; xong thì xóa khỏi thanh địa chỉ.
-const hashCfg = new URLSearchParams(location.hash.slice(1)).get('c');
-if (hashCfg) { try { LS.set('cfg', JSON.parse(atob(hashCfg))); } catch {} history.replaceState(null, '', location.pathname); }
-let cfg = LS.get('cfg', {}), token = LS.get('tok', null), tokenClient;
+// Giá trị công khai theo thiết kế: client ID chỉ định danh ứng dụng, API key bị khóa theo trang web này và chỉ cho Picker API.
+const cfg = {
+  clientId: '270555698156-ah9k8joij0qfahqsrkn43o069bp0ae40.apps.googleusercontent.com',
+  apiKey: 'AIzaSyBKJ5F1vAOzsFOB9oCqXwX0HfZ-zVSKYLw',
+  appId: '270555698156',
+};
+let token = LS.get('tok', null), tokenClient;
 let cur = null, saving = false, saveTimer, pollTimer, view = 'empty', prevView = 'empty', preview = false;
 let autoBullet = LS.get('autoBullet', true), shiftDown = false;
 const ta = $('text');
@@ -426,12 +426,8 @@ $('scrim').onclick = () => setSide(false);
 $('pick').onclick = pick;
 $('viewBtn').onclick = () => setPreview(!preview);
 $('signin').onclick = () => ensureToken().catch(needSignin);
-$('gear').onclick = () => { $('cClient').value = cfg.clientId || ''; $('cKey').value = cfg.apiKey || ''; $('cApp').value = cfg.appId || ''; show('settings'); if (mobile.matches) setSide(false); };
+$('gear').onclick = () => { show('settings'); if (mobile.matches) setSide(false); };
 $('cClose').onclick = () => show(prevView);
-$('cSave').onclick = () => {
-  cfg = { clientId: $('cClient').value.trim(), apiKey: $('cKey').value.trim(), appId: $('cApp').value.trim() };
-  LS.set('cfg', cfg); token = null; tokenClient = null; show(prevView);
-};
 document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(saveTimer); save(); } });
 addEventListener('pagehide', () => save());
 let installEv;
@@ -441,7 +437,7 @@ $('install').onclick = async () => { if (!installEv) return; installEv.prompt();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 $('autoBtn').setAttribute('aria-pressed', autoBullet);
 applySide(); renderRecent();
-if (cfg.clientId && cfg.apiKey && cfg.appId) show('empty'); else { show('settings'); prevView = 'empty'; }
+show('empty');
 </script>
 </body>
 </html>
